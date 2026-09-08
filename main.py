@@ -13,102 +13,91 @@ with open(MANIFEST_PATH) as f:
     manifest = json.load(f)
 
 
+def var(s):
+    ## prior data
+    pre_market = {'Var': 0}
+    market = {'Var': 0}
+    post_market = {'Var': 0}
 
-## prior data
-s = 0 #Estimating sample, size in days
-pre_market = {'Var': 0}
-market = {'Var': 0}
-post_market = {'Var': 0}
+    for i in range(s):
+        print(i)
+        path = os.path.join(BASE_DIR, 'Data', 'MSFT_MBP-1_CSV', manifest['files'][i+2]['filename'])
+        data = pd.read_csv(path, delimiter=',')
 
-for i in range(s):
-    path = os.path.join(BASE_DIR, 'Data', 'MSFT_MBP-1_CSV', manifest['files'][i+2]['filename'])
-    data = pd.read_csv(path, delimiter=',')
+        data['ts_event'] = pd.to_datetime(data['ts_event']).dt.tz_convert('America/New_York') #fixes winter/summer times
+        cutoff_time = pd.Timestamp('09:30:00').time()
+        cutoff_time_post = pd.Timestamp('16:00:00').time()
 
-    data['ts_event'] = pd.to_datetime(data['ts_event'])
-    cutoff_time = pd.Timestamp('13:30:00').time()
-    cutoff_time_post = pd.Timestamp('20:00:00').time()
+    # Found ticks where the ask price is 4000+ which is abnormal and would never fill so ill skip these lines in calculation of Var, by adding a Max Spread allowence
 
-    # Pre Market Open 
-    RV = 0
-    T_session = 19800
-    S_prev = None
-    for n in range(len(data)):
-        if data['ts_event'][n].time() >= cutoff_time:
-            break
-        if data['action'][n] == 'R':
-            continue
-        if pd.isna(data['ask_px_00'][n]) or pd.isna(data['bid_px_00'][n]):
-            continue
-        S = (data['bid_px_00'][n]+data['ask_px_00'][n])/2
-        if S_prev is None:
+        # Pre Market Open 
+        RV = 0
+        T_session = 19800
+        S_prev = None
+        for n in range(len(data)):
+            if data['ts_event'][n].time() >= cutoff_time:
+                break
+            if data['action'][n] == 'R':
+                continue
+            if pd.isna(data['ask_px_00'][n]) or pd.isna(data['bid_px_00'][n]):
+                continue
+            if data['ask_px_00'][n] - data['bid_px_00'][n] > 2: # Max Spread Allowence, Honestly picked by what AI said are the percentiles, but it should be higher than this based on simple logic
+                continue
+            S = (data['bid_px_00'][n]+data['ask_px_00'][n])/2
+            if S_prev is None:
+                S_prev = S
+                continue
+            RV = RV + (S - S_prev) ** 2
             S_prev = S
-            continue
-        RV = RV + (S - S_prev) ** 2
-        S_prev = S
-    pre_market['Var'] = pre_market['Var'] + RV / T_session
+        pre_market['Var'] = pre_market['Var'] + RV / T_session
 
-    # Market Open 
-    RV = 0
-    T_session = 23400
-    S_prev = None 
-    for n in range(len(data)):
-        if data['ts_event'][n].time() < cutoff_time or data['ts_event'][n].time() >= cutoff_time_post:
-            continue
-        if data['action'][n] == 'R':
-            continue
-        if pd.isna(data['ask_px_00'][n]) or pd.isna(data['bid_px_00'][n]):
-            continue
-        S = (data['bid_px_00'][n]+data['ask_px_00'][n])/2
-        if S_prev is None:
+        # Market Open 
+        RV = 0
+        T_session = 23400
+        S_prev = None 
+        for n in range(len(data)):
+            if data['ts_event'][n].time() < cutoff_time or data['ts_event'][n].time() >= cutoff_time_post:
+                continue
+            if data['action'][n] == 'R':
+                continue
+            if pd.isna(data['ask_px_00'][n]) or pd.isna(data['bid_px_00'][n]):
+                continue
+            if data['ask_px_00'][n] - data['bid_px_00'][n] > 2:
+                continue
+            S = (data['bid_px_00'][n]+data['ask_px_00'][n])/2
+            if S_prev is None:
+                S_prev = S
+                continue
+            RV = RV + (S - S_prev) ** 2
             S_prev = S
-            continue
-        RV = RV + (S - S_prev) ** 2
-        S_prev = S
-    market['Var'] = market['Var'] + RV / T_session
+        market['Var'] = market['Var'] + RV / T_session
 
-    # Post Market Open 
-    RV = 0
-    T_session = 14400
-    S_prev = None 
-    for n in range(len(data)):
-        if data['ts_event'][n].time() < cutoff_time_post:
-            continue
-        if data['action'][n] == 'R':
-            continue
-        if pd.isna(data['ask_px_00'][n]) or pd.isna(data['bid_px_00'][n]):
-            continue
-        S = (data['bid_px_00'][n]+data['ask_px_00'][n])/2
-        if S_prev is None:
+        # Post Market Open 
+        RV = 0
+        T_session = 14400
+        S_prev = None 
+        for n in range(len(data)):
+            if data['ts_event'][n].time() < cutoff_time_post:
+                continue
+            if data['action'][n] == 'R':
+                continue
+            if pd.isna(data['ask_px_00'][n]) or pd.isna(data['bid_px_00'][n]):
+                continue
+            if data['ask_px_00'][n] - data['bid_px_00'][n] > 2:
+                continue
+            S = (data['bid_px_00'][n]+data['ask_px_00'][n])/2
+            if S_prev is None:
+                S_prev = S
+                continue
+            RV = RV + (S - S_prev) ** 2
             S_prev = S
-            continue
-        RV = RV + (S - S_prev) ** 2
-        S_prev = S
-    post_market['Var'] = post_market['Var'] + RV / T_session
+        post_market['Var'] = post_market['Var'] + RV / T_session
 
-pre_market['Var'] = pre_market['Var'] / s
-market['Var'] = market['Var'] / s
-post_market['Var'] = post_market['Var'] / s
-
-print(pre_market['Var'])
-print(market['Var'])
-print(post_market['Var'])
-# what was got from s=30, very unnormal result, gotta check the data, thought it was clean
-#0.03196793135521876
-#309.4396203095001
-#0.22286033234953756
+    pre_market['Var'] = np.sqrt(pre_market['Var'] / s)
+    market['Var'] = np.sqrt(market['Var'] / s)
+    post_market['Var'] = np.sqrt(post_market['Var'] / s)
+    return(pre_market['Var'], market['Var'], post_market['Var'])
 
 
-
-
-#    if data['action'][n] == 'R':
-
-#for i in range(len(manifest['files'])-3):
-#    path = os.path.join(BASE_DIR, 'Data', 'MSFT_MBP-1_CSV', manifest['files'][i+2]['filename'])
-#    data = pd.read_csv(path, delimiter=',')
-#    q = 0
-#    X = 0
-
-
-#    for n in range(len(data)):
-
-
+#variances = var(30) #comment cause running takes too long.
+variances = [0.06251565292204324, 0.08897637394882624, 0.04032049195829899] # what i got after adding in th max spread

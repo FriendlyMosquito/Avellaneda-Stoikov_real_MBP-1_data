@@ -53,3 +53,6 @@ for j in range(len(manifest['files']) - 2):
 
 m = Counter(n)
 print(m) # the conclusion is the same, all the crossed data are from publisher_id 95, so ill drop them from the dataset.
+
+# Lets fix the data, found spots where the ask price is 4000+ which is bonkers
+
