@@ -5,6 +5,7 @@ import numpy as np
 import json as json
 import os
 import math
+import matplotlib.pyplot as plt
 
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
@@ -122,12 +123,12 @@ def var(s, interval):
 vars = [0.019499801432123733, 0.031770039887808396, 0.0386103112427142]
 
 risk = 0.01 #choice between 0 and 1, 1 being no risk, risk defined as the quantity held
-k = 1.5 #this needs computing from prior data but hasnt been done( by taking different spread and checking what the fill rate for each would be), for Im taking what the paper used, it kind of goes off the point of simulating fills as Im using real data for that.
+#k = 10 #this is a problematic part, as it changes over time, and honestly shouldn't be fixed but for now ill leave it fixed
 
 def spread(risk, q, var, t, k, market): #market: 0-pre 1-norm 2-post
     T = [('04:00', '09:30', 19800), ('09:30', '16:00', 23400), ('16:00', '20:00', 14400)]
-    deltaA = risk * q * var[market] * (T[market][2]-t) + (1/risk) * math.log(1 + risk/k)
-    deltaB = -risk * q * var[market] * (T[market][2]-t) + (1/risk) * math.log(1 + risk/k)
+    deltaA = -risk * q * var[market] * (T[market][2]-t) + (1/risk) * math.log(1 + risk/k)
+    deltaB = risk * q * var[market] * (T[market][2]-t) + (1/risk) * math.log(1 + risk/k)
     return(deltaA, deltaB)
 
 def prices(deltaA, deltaB, s):
@@ -135,7 +136,8 @@ def prices(deltaA, deltaB, s):
     pB = s - deltaB
     return(pA, pB)
 
-def updating(s, e):
+def updating(s, e, k):
+    PL = []
     for f in manifest['files'][2:]: # skip condition.json and metadata.json
         cutoff_time = pd.Timestamp('09:30:00').time()
         cutoff_time_post = pd.Timestamp('16:00:00').time()
@@ -151,9 +153,10 @@ def updating(s, e):
         p = [None, None]
         q = 0
         X = 0 # allows us to compare each day with the other fairly, no leftover q from before, each day starts with a clean slate
-
+        count = 0 #how many times q changed, just interested to keep track, essentially how many times my chosen prices were hit
         # for normal market:
         for n in range(len(data)):
+            print(n)
             ask_valid = 1
             bid_valid = 1
             if data['ts_event'][n].time() < cutoff_time or data['ts_event'][n].time() >= cutoff_time_post:
@@ -167,27 +170,82 @@ def updating(s, e):
             if pd.isna(data['bid_px_00'][n]):
                 bid_valid = 0
             if ask_valid == 1 and bid_valid == 1:
-                s = (data['ask_px_00'][n]+data['bid_px_00'][n])/2
+                mid = (data['ask_px_00'][n]+data['bid_px_00'][n])/2
             if p[1] is not None and ask_valid == 1 and data['ask_px_00'][n] < p[1]:
                 X -= p[1]
                 q += 1
+                count += 1
             if p[0] is not None and bid_valid == 1 and data['bid_px_00'][n] > p[0]:
                 X += p[0]
                 q -= 1
-
+                count += 1
             t = (data['ts_event'][n].hour * 3600 + data['ts_event'][n].minute * 60 + data['ts_event'][n].second) - (cutoff_time.hour * 3600 + cutoff_time.minute * 60 + cutoff_time.second)
             deltas = spread(risk, q, vars, t, k, 1)
-            p = prices(deltas[0], deltas[1], s)
-            
-            
-            
+            p = prices(deltas[0], deltas[1], mid)
+        PL.append({'date': file_date, 'X': X, 'q': q, 'count': count})
+    return PL
 
 
+def plot_PL(PL, start, end):
+    dates = []
+    X_vals = []
+    q_vals = []
+    count_vals = []
+    for entry in PL:
+        if entry['date'] < start or entry['date'] > end:
+            continue
+        dates.append(entry['date'])
+        X_vals.append(entry['X'])
+        q_vals.append(entry['q'])
+        count_vals.append(entry['count'])
+
+    fig, axes = plt.subplots(3, 1, figsize=(12, 9), sharex=True)
+
+    axes[0].plot(dates, X_vals, marker='o', color='tab:blue')
+    axes[0].set_ylabel('P/L (X)')
+    axes[0].set_title('Daily P/L')
+    axes[0].grid(True)
+
+    axes[1].plot(dates, q_vals, marker='o', color='tab:orange')
+    axes[1].set_ylabel('Quantity (q)')
+    axes[1].set_title('End of Day Quantity')
+    axes[1].grid(True)
+
+    axes[2].bar(dates, count_vals, color='tab:green')
+    axes[2].set_ylabel('Count')
+    axes[2].set_title('Fill Count')
+    axes[2].set_xlabel('Date')
+    axes[2].grid(True)
+
+    fig.autofmt_xdate()
+    plt.tight_layout()
+    plt.show()
 
 
+def plot_PL_vs_k(s, e, k_values):
+    k_list = []
+    total_PL = []
+    for k_val in k_values:
+        PL = updating(s, e, k_val)
+        total_PL.append(sum(entry['X'] for entry in PL))
+        k_list.append(k_val)
+
+    fig, ax = plt.subplots(figsize=(10, 6))
+    ax.plot(k_list, total_PL, marker='o', color='tab:purple')
+    ax.set_xlabel('k')
+    ax.set_ylabel('Summed P/L (X)')
+    ax.set_title('Summed P/L vs k')
+    ax.grid(True)
+    plt.tight_layout()
+    plt.show()
+    return k_list, total_PL
 
 
 s = date(2025, 3, 1)
-e = date(2025, 3, 10)
+e = date(2025, 3, 3)
 X = 1000000
-updating(s, e, X)
+k = 5
+
+plot_PL_vs_k(s, e, [1, 2, 3, 4, 5, 6, 7, 8, 9])
+PL = updating(s, e, k)
+plot_PL(PL, s, e)
