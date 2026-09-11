@@ -227,13 +227,16 @@ def plot_PL_vs_k(s, e, k_values):
     total_PL = []
     for k_val in k_values:
         PL = updating(s, e, k_val)
-        total_PL.append(sum(entry['X'] for entry in PL))
+        if sum(entry['count'] for entry in PL) != 0:
+            total_PL.append(sum((entry['count']) for entry in PL))
+        else:
+            total_PL.append(0)
         k_list.append(k_val)
 
     fig, ax = plt.subplots(figsize=(10, 6))
     ax.plot(k_list, total_PL, marker='o', color='tab:purple')
     ax.set_xlabel('k')
-    ax.set_ylabel('Summed P/L (X)')
+    ax.set_ylabel('Average PL per order fill')
     ax.set_title('Summed P/L vs k')
     ax.grid(True)
     plt.tight_layout()
@@ -242,10 +245,10 @@ def plot_PL_vs_k(s, e, k_values):
 
 
 s = date(2025, 3, 1)
-e = date(2025, 3, 3)
+e = date(2025, 3, 5)
 X = 1000000
 k = 5
 
-plot_PL_vs_k(s, e, [1, 2, 3, 4, 5, 6, 7, 8, 9])
-PL = updating(s, e, k)
-plot_PL(PL, s, e)
+plot_PL_vs_k(s, e, [1, 2, 3, 4, 5, 6, 7, 8, 9, 10])
+#PL = updating(s, e, k)
+#plot_PL(PL, s, e)
