@@ -30,7 +30,7 @@ def var(s, interval):
         data['ts_event'] = pd.to_datetime(data['ts_event']).dt.tz_convert('America/New_York') #fixes winter/summer times
         cutoff_time = pd.Timestamp('09:30:00').time()
         cutoff_time_post = pd.Timestamp('16:00:00').time()
-
+        data = data[(data['flags'] & 128) != 0].reset_index(drop=True)
     # Found ticks where the ask price is 4000+ which is abnormal and would never fill so ill skip these lines in calculation of Var, by adding a Max Spread allowence
 
         # Pre Market Open
@@ -117,18 +117,16 @@ def var(s, interval):
     return(pre_market['Var'], market['Var'], post_market['Var'])
 
 
-#variances = var(30, interval='5min') #comment cause running takes too long.
-#print(variances)
 #print (variances[0], variances[1], variances[2])
-vars = [0.019499801432123733, 0.031770039887808396, 0.0386103112427142]
-
+#vars = variances = var(30, interval='5min') #comment cause running takes too long.
+vars = [0.019493815388061855, 0.03176870705369121, 0.0386103112427142]
 risk = 0.01 #choice between 0 and 1, 1 being no risk, risk defined as the quantity held
 #k = 10 #this is a problematic part, as it changes over time, and honestly shouldn't be fixed but for now ill leave it fixed
 
 def spread(risk, q, var, t, k, market): #market: 0-pre 1-norm 2-post
     T = [('04:00', '09:30', 19800), ('09:30', '16:00', 23400), ('16:00', '20:00', 14400)]
-    deltaA = -risk * q * var[market] * (T[market][2]-t) + (1/risk) * math.log(1 + risk/k)
-    deltaB = risk * q * var[market] * (T[market][2]-t) + (1/risk) * math.log(1 + risk/k)
+    deltaA = -risk * q * var[market]**2 * ((T[market][2]-t)/T[market][2]) + (1/risk) * math.log(1 + risk/k)
+    deltaB = risk * q * var[market]**2 * ((T[market][2]-t)/T[market][2]) + (1/risk) * math.log(1 + risk/k)
     return(deltaA, deltaB)
 
 def prices(deltaA, deltaB, s):
@@ -149,14 +147,13 @@ def updating(s, e, k):
         path = os.path.join(BASE_DIR, 'Data', 'MSFT_MBP-1_CSV', fname)
         data = pd.read_csv(path, delimiter=',')
         data['ts_event'] = pd.to_datetime(data['ts_event']).dt.tz_convert('America/New_York') #fixes winter/summer times
-
+        data = data[(data['flags'] & 128) != 0].reset_index(drop=True)
         p = [None, None]
         q = 0
         X = 0 # allows us to compare each day with the other fairly, no leftover q from before, each day starts with a clean slate
         count = 0 #how many times q changed, just interested to keep track, essentially how many times my chosen prices were hit
         # for normal market:
         for n in range(len(data)):
-            print(n)
             ask_valid = 1
             bid_valid = 1
             if data['ts_event'][n].time() < cutoff_time or data['ts_event'][n].time() >= cutoff_time_post:
@@ -164,6 +161,8 @@ def updating(s, e, k):
             if data['action'][n] == 'R':
                 continue
             if data['ask_px_00'][n] - data['bid_px_00'][n] > 2:
+                continue
+            if data['ask_px_00'][n] <= data['bid_px_00'][n]:
                 continue
             if pd.isna(data['ask_px_00'][n]):
                 ask_valid = 0
@@ -228,7 +227,7 @@ def plot_PL_vs_k(s, e, k_values):
     for k_val in k_values:
         PL = updating(s, e, k_val)
         if sum(entry['count'] for entry in PL) != 0:
-            total_PL.append(sum((entry['count']) for entry in PL))
+            total_PL.append(sum((entry['X']) for entry in PL))
         else:
             total_PL.append(0)
         k_list.append(k_val)
@@ -249,6 +248,6 @@ e = date(2025, 3, 5)
 X = 1000000
 k = 5
 
-plot_PL_vs_k(s, e, [1, 2, 3, 4, 5, 6, 7, 8, 9, 10])
+plot_PL_vs_k(s, e, [ 5, 6, 7, 8])
 #PL = updating(s, e, k)
 #plot_PL(PL, s, e)
