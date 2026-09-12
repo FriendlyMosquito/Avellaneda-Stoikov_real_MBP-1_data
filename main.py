@@ -170,13 +170,13 @@ def updating(s, e, k):
                 bid_valid = 0
             if ask_valid == 1 and bid_valid == 1:
                 mid = (data['ask_px_00'][n]+data['bid_px_00'][n])/2
-            if p[1] is not None and ask_valid == 1 and data['ask_px_00'][n] < p[1]:
-                X -= p[1]
-                q += 1
-                count += 1
-            if p[0] is not None and bid_valid == 1 and data['bid_px_00'][n] > p[0]:
+            if p[0] is not None and ask_valid == 1 and data['ask_px_00'][n] >= p[0]:
                 X += p[0]
                 q -= 1
+                count += 1
+            if p[1] is not None and bid_valid == 1 and data['bid_px_00'][n] <= p[1]:
+                X -= p[1]
+                q += 1
                 count += 1
             t = (data['ts_event'][n].hour * 3600 + data['ts_event'][n].minute * 60 + data['ts_event'][n].second) - (cutoff_time.hour * 3600 + cutoff_time.minute * 60 + cutoff_time.second)
             deltas = spread(risk, q, vars, t, k, 1)
@@ -248,6 +248,6 @@ e = date(2025, 3, 5)
 X = 1000000
 k = 5
 
-plot_PL_vs_k(s, e, [ 5, 6, 7, 8])
+plot_PL_vs_k(s, e, [1, 2, 3, 4, 5, 6, 7, 8])
 #PL = updating(s, e, k)
 #plot_PL(PL, s, e)
