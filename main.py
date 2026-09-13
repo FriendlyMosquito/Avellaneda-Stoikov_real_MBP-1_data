@@ -134,42 +134,60 @@ def prices(deltaA, deltaB, s):
     pB = s - deltaB
     return(pA, pB)
 
-def updating(s, e, k):
-    PL = []
+def dates(s, e):
+    dates=[]
     for f in manifest['files'][2:]: # skip condition.json and metadata.json
-        cutoff_time = pd.Timestamp('09:30:00').time()
-        cutoff_time_post = pd.Timestamp('16:00:00').time()
         fname = f['filename']
-        file_date = date(int(fname[10:14]), int(fname[14:16]), int(fname[16:18])) # filenames are equs-mini-YYYYMMDD.mbp-1.csv
+        file_date = date(int(fname[10:14]), int(fname[14:16]), int(fname[16:18]))
         if file_date < s or file_date > e:
             continue
+        else:
+            dates.append(fname)
+    return dates
 
+data_cache = {}
+def data(dates):
+    for fname in dates:
+        file_date = date(int(fname[10:14]), int(fname[14:16]), int(fname[16:18]))
         path = os.path.join(BASE_DIR, 'Data', 'MSFT_MBP-1_CSV', fname)
         data = pd.read_csv(path, delimiter=',')
         data['ts_event'] = pd.to_datetime(data['ts_event']).dt.tz_convert('America/New_York') #fixes winter/summer times
-        data = data[(data['flags'] & 128) != 0].reset_index(drop=True)
-        p = [None, None]
-        q = 0
-        X = 0 # allows us to compare each day with the other fairly, no leftover q from before, each day starts with a clean slate
-        count = 0 #how many times q changed, just interested to keep track, essentially how many times my chosen prices were hit
-        # for normal market:
+        data['spread'] = data['ask_px_00'] - data['bid_px_00']
+        data['mid'] = (data['ask_px_00'] + data['bid_px_00'])/2
+        data['book_ok'] = data['ask_px_00'].notna() & data['bid_px_00'].notna()
+        data = data[((data['flags'] & 128) != 0) &
+        (data['action'] != 'R') &
+        (data['spread'] < 2) &
+        (~data['book_ok'] | (data['bid_px_00'] < data['ask_px_00']))].reset_index(drop=True)
+        data_cache[file_date] = data
+    return data_cache
+
+
+def updating(data_cache):
+    PL = []
+    cutoff_time = pd.Timestamp('09:30:00').time()
+    cutoff_time_post = pd.Timestamp('16:00:00').time()
+    p = [None, None]
+    q = 0
+    X = 0 # allows us to compare each day with the other fairly, no leftover q from before, each day starts with a clean slate
+    count = 0 #how many times q changed, just interested to keep track, essentially how many times my chosen prices were hit
+    # for normal market:
+    for file_date, data in data_cache.items():
         for n in range(len(data)):
             ask_valid = 1
             bid_valid = 1
             if data['ts_event'][n].time() < cutoff_time or data['ts_event'][n].time() >= cutoff_time_post:
                 continue
             if data['action'][n] == 'R':
-                continue
+                print('R')
             if data['ask_px_00'][n] - data['bid_px_00'][n] > 2:
-                continue
+                print('Spread')
             if data['ask_px_00'][n] <= data['bid_px_00'][n]:
-                continue
+                print('Cross')
             if pd.isna(data['ask_px_00'][n]):
                 ask_valid = 0
             if pd.isna(data['bid_px_00'][n]):
                 bid_valid = 0
-            if ask_valid == 1 and bid_valid == 1:
-                mid = (data['ask_px_00'][n]+data['bid_px_00'][n])/2
             if p[0] is not None and ask_valid == 1 and data['ask_px_00'][n] >= p[0]:
                 X += p[0]
                 q -= 1
@@ -244,10 +262,11 @@ def plot_PL_vs_k(s, e, k_values):
 
 
 s = date(2025, 3, 1)
-e = date(2025, 3, 5)
+e = date(2025, 3, 3)
 X = 1000000
 k = 5
+updating(data(dates(s, e)))
 
-plot_PL_vs_k(s, e, [1, 2, 3, 4, 5, 6, 7, 8])
+#plot_PL_vs_k(s, e, [1, 2, 3, 4, 5, 6, 7, 8])
 #PL = updating(s, e, k)
 #plot_PL(PL, s, e)
