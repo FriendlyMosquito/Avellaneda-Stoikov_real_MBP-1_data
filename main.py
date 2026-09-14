@@ -125,8 +125,8 @@ risk = 0.01 #choice between 0 and 1, 1 being no risk, risk defined as the quanti
 
 def spread(risk, q, var, t, k, market): #market: 0-pre 1-norm 2-post
     T = [('04:00', '09:30', 19800), ('09:30', '16:00', 23400), ('16:00', '20:00', 14400)]
-    deltaA = -risk * q * var[market]**2 * ((T[market][2]-t)/T[market][2]) + (1/risk) * math.log(1 + risk/k)
-    deltaB = risk * q * var[market]**2 * ((T[market][2]-t)/T[market][2]) + (1/risk) * math.log(1 + risk/k)
+    deltaA = -risk * q * var[market]**2 * ((T[market][2]-t)) + (1/risk) * math.log(1 + risk/k)
+    deltaB = risk * q * var[market]**2 * ((T[market][2]-t)) + (1/risk) * math.log(1 + risk/k)
     return(deltaA, deltaB)
 
 def prices(deltaA, deltaB, s):
@@ -172,7 +172,8 @@ def updating(data_cache, k, risk=risk, record_trace=False):
         q = 0
         X = 0 # allows us to compare each day with the other fairly, no leftover q from before, each day starts with a clean slate
         count = 0 #how many times q changed, just interested to keep track, essentially how many times my chosen prices were hit
-        trace = {'t': [], 'mid': [], 'pA': [], 'pB': [], 'q': []} if record_trace else None
+        last_mid = None
+        trace = {'t': [], 'mid': [], 'pA': [], 'pB': [], 'q': [], 'X': []} if record_trace else None
         # for normal market:
         for n in range(len(data)):
             ask_valid = 1
@@ -200,13 +201,16 @@ def updating(data_cache, k, risk=risk, record_trace=False):
             t = (data['ts_event'][n].hour * 3600 + data['ts_event'][n].minute * 60 + data['ts_event'][n].second) - (cutoff_time.hour * 3600 + cutoff_time.minute * 60 + cutoff_time.second)
             deltas = spread(risk, q, vars, t, k, 1)
             p = prices(deltas[0], deltas[1], data['mid'][n])
+            last_mid = data['mid'][n]
             if record_trace:
                 trace['t'].append(data['ts_event'][n])
                 trace['mid'].append(data['mid'][n])
                 trace['pA'].append(p[0])
                 trace['pB'].append(p[1])
                 trace['q'].append(q)
-        entry = {'date': file_date, 'X': X, 'q': q, 'count': count}
+                trace['X'].append(X)
+        wealth = X + last_mid * q if last_mid is not None else X # mark-to-market: cash plus inventory valued at the day's last mid
+        entry = {'date': file_date, 'X': X, 'q': q, 'count': count, 'wealth': wealth}
         if record_trace:
             entry['trace'] = trace
         PL.append(entry)

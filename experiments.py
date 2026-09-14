@@ -35,24 +35,24 @@ import main
 CONFIG = {
     # date range used for the k-sweep (graph 1) and risk-sweep (graph 2)
     'start_date': date(2025, 3, 1),
-    'end_date': date(2025, 3, 5),
+    'end_date': date(2025, 3, 1),
 
     # --- graph 1: k sweep ---------------------------------------------
     # total X, total fill count, and average end-of-day q vs k, at one
     # fixed risk value, summed/averaged over start_date..end_date
-    'k_values': [1, 5, 10],
+    'k_values': [5, 8, 10, 13, 15],
     'risk_for_k_sweep': 0.01,
 
     # --- graph 2: risk sweep (panel data) -------------------------------
     # daily X / q / count, one line per risk value, at one fixed k
-    'risk_values': [0.005, 0.01, 0.02],
-    'k_for_risk_sweep': 10,
+    'risk_values': [0.01, 0.05],
+    'k_for_risk_sweep': 5,
 
     # --- graph 3: intraday trace ----------------------------------------
     # mid / pA / pB over the day, with q underneath, for specific day(s)
-    'trace_dates': [date(2025, 3, 3)],
+    'trace_dates': [date(2025, 3, 1)],
     'risk_for_trace': 0.01,
-    'k_for_trace': 10,
+    'k_for_trace': 15,
 
     # output behaviour
     'show_plots': True,
@@ -66,19 +66,22 @@ OUT_DIR = os.path.join(BASE_DIR, 'experiment_plots')
 # Graph 1: X / count / avg end-of-day q vs k, at a fixed risk
 # ============================================================
 def graph_k_sweep(data_cache, k_values, risk):
-    k_list, X_list, count_list, avg_q_list = [], [], [], []
+    k_list, X_list, wealth_list, count_list, avg_q_list = [], [], [], [], []
     for k in k_values:
         PL = main.updating(data_cache, k, risk=risk)
         k_list.append(k)
         X_list.append(sum(entry['X'] for entry in PL))
+        wealth_list.append(sum(entry['wealth'] for entry in PL))
         count_list.append(sum(entry['count'] for entry in PL))
         avg_q_list.append(np.mean([entry['q'] for entry in PL]) if PL else 0)
 
     fig, axes = plt.subplots(3, 1, figsize=(10, 9), sharex=True)
 
-    axes[0].plot(k_list, X_list, marker='o', color='tab:blue')
-    axes[0].set_ylabel('Total P/L (X)')
+    axes[0].plot(k_list, X_list, marker='o', color='tab:blue', label='X (cash)')
+    axes[0].plot(k_list, wealth_list, marker='o', color='tab:red', label='Wealth (X + mid*q)')
+    axes[0].set_ylabel('Total P/L')
     axes[0].set_title(f'P/L vs k  (risk={risk})')
+    axes[0].legend()
     axes[0].grid(True)
 
     axes[1].plot(k_list, count_list, marker='o', color='tab:green')
@@ -97,8 +100,8 @@ def graph_k_sweep(data_cache, k_values, risk):
 
 
 # ============================================================
-# Graph 2: daily X / q / count, one line per risk value (panel data),
-# at a fixed k -- three separate figures
+# Graph 2: daily X / wealth / q / count, one line per risk value
+# (panel data), at a fixed k -- four separate figures
 # ============================================================
 def graph_risk_panels(data_cache, risk_values, k):
     per_risk = {risk: main.updating(data_cache, k, risk=risk) for risk in risk_values}
@@ -106,6 +109,7 @@ def graph_risk_panels(data_cache, risk_values, k):
     figs = []
     for metric, ylabel, title in [
         ('X', 'P/L (X)', 'Daily P/L by risk'),
+        ('wealth', 'Wealth (X + mid*q)', 'Daily end-of-day wealth by risk'),
         ('q', 'End-of-day q', 'Daily end-of-day inventory by risk'),
         ('count', 'Fill count', 'Daily fill count by risk'),
     ]:
@@ -123,7 +127,7 @@ def graph_risk_panels(data_cache, risk_values, k):
         fig.autofmt_xdate()
         fig.tight_layout()
         figs.append(fig)
-    return figs  # [fig_X, fig_q, fig_count]
+    return figs  # [fig_X, fig_wealth, fig_q, fig_count]
 
 
 # ============================================================
@@ -138,7 +142,7 @@ def graph_day_trace(data_cache, trace_date, risk, k):
     PL = main.updating({trace_date: day_df}, k, risk=risk, record_trace=True)
     trace = PL[0]['trace']
 
-    fig, axes = plt.subplots(2, 1, figsize=(12, 7), sharex=True, gridspec_kw={'height_ratios': [3, 1]})
+    fig, axes = plt.subplots(3, 1, figsize=(12, 9), sharex=True, gridspec_kw={'height_ratios': [3, 1.5, 1.5]})
 
     axes[0].plot(trace['t'], trace['mid'], label='mid', color='black', linewidth=1)
     axes[0].plot(trace['t'], trace['pA'], label='pA (ask quote)', color='tab:red', linewidth=0.8)
@@ -148,18 +152,29 @@ def graph_day_trace(data_cache, trace_date, risk, k):
     axes[0].legend()
     axes[0].grid(True)
 
+    axes[1].plot(trace['t'], trace['X'], color='tab:brown', linewidth=1)
+    axes[1].axhline(0, color='black', linewidth=0.6)
+    axes[1].set_ylabel('P/L (X)')
+    axes[1].set_title('Running P&L over the day')
+    axes[1].grid(True)
+
     # step + fill instead of a plain bar() -- a day has tens of thousands of
     # ticks, and a literal bar per tick is both slow to render and unreadable;
     # this reads the same way (a filled q profile) without either problem
-    axes[1].fill_between(trace['t'], trace['q'], step='post', color='tab:purple', alpha=0.6)
-    axes[1].axhline(0, color='black', linewidth=0.6)
-    axes[1].set_ylabel('q')
-    axes[1].set_xlabel('Time')
-    axes[1].set_title('Inventory (q) over the day')
-    axes[1].grid(True)
+    axes[2].fill_between(trace['t'], trace['q'], step='post', color='tab:purple', alpha=0.6)
+    axes[2].axhline(0, color='black', linewidth=0.6)
+    axes[2].set_ylabel('q')
+    axes[2].set_xlabel('Time')
+    axes[2].set_title('Inventory (q) over the day')
+    axes[2].grid(True)
 
     fig.autofmt_xdate()
     fig.tight_layout()
+
+    wealth = PL[0]['wealth']
+    fig.subplots_adjust(right=0.86)
+    fig.text(0.995, 0.5, f'Wealth (EOD)\nX + mid*q\n${wealth:,.2f}', ha='right', va='center',
+              fontsize=11, bbox={'boxstyle': 'round', 'facecolor': 'whitesmoke', 'edgecolor': 'gray'})
     return fig
 
 
@@ -187,11 +202,12 @@ def main_run():
     figs.append(fig1)
 
     print('Running risk sweep / panel data (graph 2)...')
-    fig_X, fig_q, fig_count = graph_risk_panels(sweep_cache, cfg['risk_values'], cfg['k_for_risk_sweep'])
+    fig_X, fig_wealth, fig_q, fig_count = graph_risk_panels(sweep_cache, cfg['risk_values'], cfg['k_for_risk_sweep'])
     fig_X.savefig(os.path.join(OUT_DIR, '2a_risk_panel_X.png'), dpi=130)
-    fig_q.savefig(os.path.join(OUT_DIR, '2b_risk_panel_q.png'), dpi=130)
-    fig_count.savefig(os.path.join(OUT_DIR, '2c_risk_panel_count.png'), dpi=130)
-    figs.extend([fig_X, fig_q, fig_count])
+    fig_wealth.savefig(os.path.join(OUT_DIR, '2b_risk_panel_wealth.png'), dpi=130)
+    fig_q.savefig(os.path.join(OUT_DIR, '2c_risk_panel_q.png'), dpi=130)
+    fig_count.savefig(os.path.join(OUT_DIR, '2d_risk_panel_count.png'), dpi=130)
+    figs.extend([fig_X, fig_wealth, fig_q, fig_count])
 
     print('Running intraday trace(s) (graph 3)...')
     for trace_date in cfg['trace_dates']:
