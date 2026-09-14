@@ -120,13 +120,12 @@ def var(s, interval):
 #print (variances[0], variances[1], variances[2])
 #vars = variances = var(30, interval='5min') #comment cause running takes too long.
 vars = [0.019493815388061855, 0.03176870705369121, 0.0386103112427142]
-risk = 0.01 #choice between 0 and 1, 1 being no risk, risk defined as the quantity held
-#k = 10 #this is a problematic part, as it changes over time, and honestly shouldn't be fixed but for now ill leave it fixed
+risk = 0.01 
 
 def spread(risk, q, var, t, k, market): #market: 0-pre 1-norm 2-post
     T = [('04:00', '09:30', 19800), ('09:30', '16:00', 23400), ('16:00', '20:00', 14400)]
-    deltaA = -0.5 * risk * q * var[market]**2 * ((T[market][2]-t)) + (1/risk) * math.log(1 + risk/k)
-    deltaB = 0.5 * risk * q * var[market]**2 * ((T[market][2]-t)) + (1/risk) * math.log(1 + risk/k)
+    deltaA = (0.5 - q) * risk * var[market]**2 * ((T[market][2]-t)) + (1/risk) * math.log(1 + risk/k)
+    deltaB = (0.5 + q) * risk * var[market]**2 * ((T[market][2]-t)) + (1/risk) * math.log(1 + risk/k)
     return(deltaA, deltaB)
 
 def prices(deltaA, deltaB, s):
@@ -179,11 +178,11 @@ def updating(data_cache, k, risk=risk, record_trace=False):
             if data['ts_event'][n].time() < cutoff_time or data['ts_event'][n].time() >= cutoff_time_post:
                 continue
             if data['action'][n] == 'T':
-                if p[0] is not None and data['side'][n] == 'B' and data['price'][n] >= p[0] and p[0] > data['mid'][n]:
+                if p[0] is not None and data['side'][n] == 'B' and data['price'][n] >= p[0]:
                     X += p[0]
                     q -= 1
                     count += 1
-                elif p[1] is not None and data['side'][n] == 'A' and data['price'][n] <= p[1] and p[1] < data['mid'][n]:
+                elif p[1] is not None and data['side'][n] == 'A' and data['price'][n] <= p[1]:
                     X -= p[1]
                     q += 1
                     count += 1
