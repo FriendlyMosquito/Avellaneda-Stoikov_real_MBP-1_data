@@ -163,16 +163,17 @@ def data(dates):
     return data_cache
 
 
-def updating(data_cache):
+def updating(data_cache, k, risk=risk, record_trace=False):
     PL = []
     cutoff_time = pd.Timestamp('09:30:00').time()
     cutoff_time_post = pd.Timestamp('16:00:00').time()
-    p = [None, None]
-    q = 0
-    X = 0 # allows us to compare each day with the other fairly, no leftover q from before, each day starts with a clean slate
-    count = 0 #how many times q changed, just interested to keep track, essentially how many times my chosen prices were hit
-    # for normal market:
     for file_date, data in data_cache.items():
+        p = [None, None]
+        q = 0
+        X = 0 # allows us to compare each day with the other fairly, no leftover q from before, each day starts with a clean slate
+        count = 0 #how many times q changed, just interested to keep track, essentially how many times my chosen prices were hit
+        trace = {'t': [], 'mid': [], 'pA': [], 'pB': [], 'q': []} if record_trace else None
+        # for normal market:
         for n in range(len(data)):
             ask_valid = 1
             bid_valid = 1
@@ -198,8 +199,17 @@ def updating(data_cache):
                 count += 1
             t = (data['ts_event'][n].hour * 3600 + data['ts_event'][n].minute * 60 + data['ts_event'][n].second) - (cutoff_time.hour * 3600 + cutoff_time.minute * 60 + cutoff_time.second)
             deltas = spread(risk, q, vars, t, k, 1)
-            p = prices(deltas[0], deltas[1], mid)
-        PL.append({'date': file_date, 'X': X, 'q': q, 'count': count})
+            p = prices(deltas[0], deltas[1], data['mid'][n])
+            if record_trace:
+                trace['t'].append(data['ts_event'][n])
+                trace['mid'].append(data['mid'][n])
+                trace['pA'].append(p[0])
+                trace['pB'].append(p[1])
+                trace['q'].append(q)
+        entry = {'date': file_date, 'X': X, 'q': q, 'count': count}
+        if record_trace:
+            entry['trace'] = trace
+        PL.append(entry)
     return PL
 
 
@@ -242,14 +252,14 @@ def plot_PL(PL, start, end):
 def plot_PL_vs_k(s, e, k_values):
     k_list = []
     total_PL = []
+    dat = data(dates(s, e))
     for k_val in k_values:
-        PL = updating(s, e, k_val)
+        PL = updating(dat, k_val)
         if sum(entry['count'] for entry in PL) != 0:
             total_PL.append(sum((entry['X']) for entry in PL))
         else:
             total_PL.append(0)
         k_list.append(k_val)
-
     fig, ax = plt.subplots(figsize=(10, 6))
     ax.plot(k_list, total_PL, marker='o', color='tab:purple')
     ax.set_xlabel('k')
@@ -261,12 +271,12 @@ def plot_PL_vs_k(s, e, k_values):
     return k_list, total_PL
 
 
-s = date(2025, 3, 1)
-e = date(2025, 3, 3)
-X = 1000000
-k = 5
-updating(data(dates(s, e)))
+if __name__ == '__main__':
+    s = date(2025, 3, 1)
+    e = date(2025, 3, 5)
+    k = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10]
+    plot_PL_vs_k(s, e, k)
 
-#plot_PL_vs_k(s, e, [1, 2, 3, 4, 5, 6, 7, 8])
-#PL = updating(s, e, k)
-#plot_PL(PL, s, e)
+    #plot_PL_vs_k(s, e, [1, 2, 3, 4, 5, 6, 7, 8])
+    #PL = updating(s, e, k)
+    #plot_PL(PL, s, e)
