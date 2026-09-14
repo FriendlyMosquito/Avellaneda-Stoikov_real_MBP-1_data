@@ -125,8 +125,8 @@ risk = 0.01 #choice between 0 and 1, 1 being no risk, risk defined as the quanti
 
 def spread(risk, q, var, t, k, market): #market: 0-pre 1-norm 2-post
     T = [('04:00', '09:30', 19800), ('09:30', '16:00', 23400), ('16:00', '20:00', 14400)]
-    deltaA = -risk * q * var[market]**2 * ((T[market][2]-t)) + (1/risk) * math.log(1 + risk/k)
-    deltaB = risk * q * var[market]**2 * ((T[market][2]-t)) + (1/risk) * math.log(1 + risk/k)
+    deltaA = -0.5 * risk * q * var[market]**2 * ((T[market][2]-t)) + (1/risk) * math.log(1 + risk/k)
+    deltaB = 0.5 * risk * q * var[market]**2 * ((T[market][2]-t)) + (1/risk) * math.log(1 + risk/k)
     return(deltaA, deltaB)
 
 def prices(deltaA, deltaB, s):
@@ -176,28 +176,17 @@ def updating(data_cache, k, risk=risk, record_trace=False):
         trace = {'t': [], 'mid': [], 'pA': [], 'pB': [], 'q': [], 'X': []} if record_trace else None
         # for normal market:
         for n in range(len(data)):
-            ask_valid = 1
-            bid_valid = 1
             if data['ts_event'][n].time() < cutoff_time or data['ts_event'][n].time() >= cutoff_time_post:
                 continue
-            if data['action'][n] == 'R':
-                print('R')
-            if data['ask_px_00'][n] - data['bid_px_00'][n] > 2:
-                print('Spread')
-            if data['ask_px_00'][n] <= data['bid_px_00'][n]:
-                print('Cross')
-            if pd.isna(data['ask_px_00'][n]):
-                ask_valid = 0
-            if pd.isna(data['bid_px_00'][n]):
-                bid_valid = 0
-            if p[0] is not None and ask_valid == 1 and data['ask_px_00'][n] >= p[0]:
-                X += p[0]
-                q -= 1
-                count += 1
-            if p[1] is not None and bid_valid == 1 and data['bid_px_00'][n] <= p[1]:
-                X -= p[1]
-                q += 1
-                count += 1
+            if data['action'][n] == 'T':
+                if p[0] is not None and data['side'][n] == 'B' and data['price'][n] >= p[0] and p[0] > data['mid'][n]:
+                    X += p[0]
+                    q -= 1
+                    count += 1
+                elif p[1] is not None and data['side'][n] == 'A' and data['price'][n] <= p[1] and p[1] < data['mid'][n]:
+                    X -= p[1]
+                    q += 1
+                    count += 1
             t = (data['ts_event'][n].hour * 3600 + data['ts_event'][n].minute * 60 + data['ts_event'][n].second) - (cutoff_time.hour * 3600 + cutoff_time.minute * 60 + cutoff_time.second)
             deltas = spread(risk, q, vars, t, k, 1)
             p = prices(deltas[0], deltas[1], data['mid'][n])
@@ -215,42 +204,6 @@ def updating(data_cache, k, risk=risk, record_trace=False):
             entry['trace'] = trace
         PL.append(entry)
     return PL
-
-
-def plot_PL(PL, start, end):
-    dates = []
-    X_vals = []
-    q_vals = []
-    count_vals = []
-    for entry in PL:
-        if entry['date'] < start or entry['date'] > end:
-            continue
-        dates.append(entry['date'])
-        X_vals.append(entry['X'])
-        q_vals.append(entry['q'])
-        count_vals.append(entry['count'])
-
-    fig, axes = plt.subplots(3, 1, figsize=(12, 9), sharex=True)
-
-    axes[0].plot(dates, X_vals, marker='o', color='tab:blue')
-    axes[0].set_ylabel('P/L (X)')
-    axes[0].set_title('Daily P/L')
-    axes[0].grid(True)
-
-    axes[1].plot(dates, q_vals, marker='o', color='tab:orange')
-    axes[1].set_ylabel('Quantity (q)')
-    axes[1].set_title('End of Day Quantity')
-    axes[1].grid(True)
-
-    axes[2].bar(dates, count_vals, color='tab:green')
-    axes[2].set_ylabel('Count')
-    axes[2].set_title('Fill Count')
-    axes[2].set_xlabel('Date')
-    axes[2].grid(True)
-
-    fig.autofmt_xdate()
-    plt.tight_layout()
-    plt.show()
 
 
 def plot_PL_vs_k(s, e, k_values):
