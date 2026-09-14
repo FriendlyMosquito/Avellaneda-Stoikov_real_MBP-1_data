@@ -124,8 +124,8 @@ risk = 0.01
 
 def spread(risk, q, var, t, k, market): #market: 0-pre 1-norm 2-post
     T = [('04:00', '09:30', 19800), ('09:30', '16:00', 23400), ('16:00', '20:00', 14400)]
-    deltaA = (0.5 - q) * risk * var[market]**2 * ((T[market][2]-t)) + (1/risk) * math.log(1 + risk/k)
-    deltaB = (0.5 + q) * risk * var[market]**2 * ((T[market][2]-t)) + (1/risk) * math.log(1 + risk/k)
+    deltaA = (0.5 - q) * risk * var[market]**2 * 300 + (1/risk) * math.log(1 + risk/k)
+    deltaB = (0.5 + q) * risk * var[market]**2 * 300 + (1/risk) * math.log(1 + risk/k)
     return(deltaA, deltaB)
 
 def prices(deltaA, deltaB, s):
