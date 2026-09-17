@@ -35,7 +35,6 @@ def var(s, interval):
 
         # Pre Market Open
         RV = 0
-        T_session = 19800
         S_prev = None
         last_sample_time = None
         for n in range(len(data)):
@@ -57,11 +56,10 @@ def var(s, interval):
             RV = RV + (S - S_prev) ** 2
             S_prev = S
             last_sample_time = data['ts_event'][n]
-        pre_market['Var'] = pre_market['Var'] + RV / T_session
+        pre_market['Var'] = pre_market['Var'] + RV #changed all variances in per day not second to normalize across the whole code
 
         # Market Open
         RV = 0
-        T_session = 23400
         S_prev = None
         last_sample_time = None
         for n in range(len(data)):
@@ -83,11 +81,10 @@ def var(s, interval):
             RV = RV + (S - S_prev) ** 2
             S_prev = S
             last_sample_time = data['ts_event'][n]
-        market['Var'] = market['Var'] + RV / T_session
+        market['Var'] = market['Var'] + RV
 
         # Post Market Open
         RV = 0
-        T_session = 14400
         S_prev = None
         last_sample_time = None
         for n in range(len(data)):
@@ -109,7 +106,7 @@ def var(s, interval):
             RV = RV + (S - S_prev) ** 2
             S_prev = S
             last_sample_time = data['ts_event'][n]
-        post_market['Var'] = post_market['Var'] + RV / T_session
+        post_market['Var'] = post_market['Var'] + RV
 
     pre_market['Var'] = np.sqrt(pre_market['Var'] / s)
     market['Var'] = np.sqrt(market['Var'] / s)
