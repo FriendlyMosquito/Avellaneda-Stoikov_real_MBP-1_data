@@ -28,7 +28,6 @@ def var(s, interval):
         data['ts_event'] = pd.to_datetime(data['ts_event']).dt.tz_convert('America/New_York') #fixes winter/summer times
         cutoff_time = pd.Timestamp('09:30:00').time()
         cutoff_time_post = pd.Timestamp('16:00:00').time()
-        data = data[(data['flags'] & 128) != 0].reset_index(drop=True)
     # Found ticks where the ask price is 4000+ which is abnormal and would never fill so ill skip these lines in calculation of Var, by adding a Max Spread allowence
 
         # Market Open
@@ -65,10 +64,16 @@ def var(s, interval):
 vars = 24.779591501879146 # in dollars per session
 risk = 0.00004
 
-def spread(risk, q, var, t, k):
-    T = 1 # normalized
-    deltaA = (0.5 - q) * risk * var * (T-t) + (1/risk) * math.log(1 + risk/k)
-    deltaB = (0.5 + q) * risk * var * (T-t) + (1/risk) * math.log(1 + risk/k)
+def spread(risk, q, var, k):
+    constant = 0.5
+    deltaA = (0.5 - q) * risk * var * (constant) + (1/risk) * math.log(1 + risk/k)
+    deltaB = (0.5 + q) * risk * var * (constant) + (1/risk) * math.log(1 + risk/k)
+    return(deltaA, deltaB)
+
+def spread_symmetric (risk, var, k):
+    constant = 0.5
+    deltaA = (0.5) * risk * var * (constant) + (1/risk) * math.log(1 + risk/k)
+    deltaB = (0.5) * risk * var * (constant) + (1/risk) * math.log(1 + risk/k)
     return(deltaA, deltaB)
 
 def prices(deltaA, deltaB, s):
@@ -87,21 +92,20 @@ def dates(s, e):
             dates.append(fname)
     return dates
 
-data_cache = {}
 def data(dates):
+    data_cache = {} # local: returns only the days asked for, no leftovers from earlier calls
     for fname in dates:
         file_date = date(int(fname[10:14]), int(fname[14:16]), int(fname[16:18]))
         path = os.path.join(BASE_DIR, 'Data', 'MSFT_MBP-1_CSV', fname)
-        data = pd.read_csv(path, delimiter=',')
-        data['ts_event'] = pd.to_datetime(data['ts_event']).dt.tz_convert('America/New_York') #fixes winter/summer times
-        data['spread'] = data['ask_px_00'] - data['bid_px_00']
-        data['mid'] = (data['ask_px_00'] + data['bid_px_00'])/2
-        data['book_ok'] = data['ask_px_00'].notna() & data['bid_px_00'].notna()
-        data = data[((data['flags'] & 128) != 0) &
-        (data['action'] != 'R') &
-        (data['spread'] < 2) &
-        (~data['book_ok'] | (data['bid_px_00'] < data['ask_px_00']))].reset_index(drop=True)
-        data_cache[file_date] = data
+        df = pd.read_csv(path, delimiter=',')
+        df['ts_event'] = pd.to_datetime(df['ts_event']).dt.tz_convert('America/New_York') #fixes winter/summer times
+        df['spread'] = df['ask_px_00'] - df['bid_px_00']
+        df['mid'] = (df['ask_px_00'] + df['bid_px_00'])/2
+        df['book_ok'] = df['ask_px_00'].notna() & df['bid_px_00'].notna()
+        df = df[(df['action'] != 'R') &
+        (df['spread'] < 2) &
+        (~df['book_ok'] | (df['bid_px_00'] < df['ask_px_00']))].reset_index(drop=True)
+        data_cache[file_date] = df
     return data_cache
 
 
@@ -115,8 +119,13 @@ def updating(data_cache, k, risk=risk, record_trace=False):
         q = 0
         X = 0 # allows us to compare each day with the other fairly, no leftover q from before, each day starts with a clean slate
         count = 0 #how many times q changed, just interested to keep track, essentially how many times my chosen prices were hit
+        sp = [None, None] # s* = the symmetric-quote book, run side by side on the same ticks as the inventory-aware one
+        sq = 0
+        sX = 0
+        scount = 0
         last_mid = None
-        trace = {'t': [], 'mid': [], 'pA': [], 'pB': [], 'q': [], 'X': []} if record_trace else None
+        trace = {'t': [], 'mid': [], 'pA': [], 'pB': [], 'q': [], 'X': [],
+                 'spA': [], 'spB': [], 'sq': [], 'sX': []} if record_trace else None
         # for normal market:
         for n in range(len(data)):
             if data['ts_event'][n].time() < cutoff_time or data['ts_event'][n].time() >= cutoff_time_post:
@@ -130,10 +139,22 @@ def updating(data_cache, k, risk=risk, record_trace=False):
                     X -= p[1]
                     q += 1
                     count += 1
+                if sp[0] is not None and data['side'][n] == 'B' and data['price'][n] >= sp[0]:
+                    sX += sp[0]
+                    sq -= 1
+                    scount += 1
+                elif sp[1] is not None and data['side'][n] == 'A' and data['price'][n] <= sp[1]:
+                    sX -= sp[1]
+                    sq += 1
+                    scount += 1
             t = (data['ts_event'][n].hour * 3600 + data['ts_event'][n].minute * 60 + data['ts_event'][n].second) - (cutoff_time.hour * 3600 + cutoff_time.minute * 60 + cutoff_time.second)
             t = t/Session_Seconds
-            deltas = spread(risk, q, vars, t, k)
+
+            deltas = spread(risk, q, vars, k)
+            symm_deltas = spread_symmetric(risk, vars, k)
+
             p = prices(deltas[0], deltas[1], data['mid'][n])
+            sp = prices(symm_deltas[0], symm_deltas[1], data['mid'][n])
             last_mid = data['mid'][n]
             if record_trace:
                 trace['t'].append(data['ts_event'][n])
@@ -142,8 +163,14 @@ def updating(data_cache, k, risk=risk, record_trace=False):
                 trace['pB'].append(p[1])
                 trace['q'].append(q)
                 trace['X'].append(X)
+                trace['spA'].append(sp[0])
+                trace['spB'].append(sp[1])
+                trace['sq'].append(sq)
+                trace['sX'].append(sX)
         wealth = X + last_mid * q if last_mid is not None else X # mark-to-market: cash plus inventory valued at the day's last mid
-        entry = {'date': file_date, 'X': X, 'q': q, 'count': count, 'wealth': wealth}
+        swealth = sX + last_mid * sq if last_mid is not None else sX
+        entry = {'date': file_date, 'X': X, 'q': q, 'count': count, 'wealth': wealth,
+                 'sX': sX, 'sq': sq, 'scount': scount, 'swealth': swealth}
         if record_trace:
             entry['trace'] = trace
         PL.append(entry)
@@ -174,9 +201,9 @@ def plot_PL_vs_k(s, e, k_values):
 #startup check-up, how many ticks per share change in q, to not run bad values and waste time
 
 if __name__ == '__main__':
-    s = date(2025, 3, 1)
-    e = date(2025, 3, 5)
-    k = [50, 100, 150, 200, 250, 300, 350, 400]
+    s = date(2025, 4, 1)
+    e = date(2025, 5, 1)
+    k = [10, 15, 20, 25, 30, 35, 40, 45]
     plot_PL_vs_k(s, e, k)
 
     #plot_PL_vs_k(s, e, [1, 2, 3, 4, 5, 6, 7, 8])
