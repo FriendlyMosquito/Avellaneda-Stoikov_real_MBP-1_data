@@ -1,11 +1,8 @@
-from os import path
 from datetime import date
 import pandas as pd
-import numpy as np
 import json as json
 import os
 import math
-import matplotlib.pyplot as plt
 
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
@@ -175,37 +172,3 @@ def updating(data_cache, k, risk=risk, record_trace=False):
             entry['trace'] = trace
         PL.append(entry)
     return PL
-
-
-def plot_PL_vs_k(s, e, k_values):
-    k_list = []
-    total_PL = []
-    dat = data(dates(s, e))
-    for k_val in k_values:
-        PL = updating(dat, k_val)
-        if sum(entry['count'] for entry in PL) != 0:
-            total_PL.append(sum((entry['wealth']) for entry in PL))
-        else:
-            total_PL.append(0)
-        k_list.append(k_val)
-    fig, ax = plt.subplots(figsize=(10, 6))
-    ax.plot(k_list, total_PL, marker='o', color='tab:purple')
-    ax.set_xlabel('k')
-    ax.set_ylabel('Summed wealth')
-    ax.set_title('Summed P/L vs k')
-    ax.grid(True)
-    plt.tight_layout()
-    plt.show()
-    return k_list, total_PL
-
-#startup check-up, how many ticks per share change in q, to not run bad values and waste time
-
-if __name__ == '__main__':
-    s = date(2025, 4, 1)
-    e = date(2025, 5, 1)
-    k = [10, 15, 20, 25, 30, 35, 40, 45]
-    plot_PL_vs_k(s, e, k)
-
-    #plot_PL_vs_k(s, e, [1, 2, 3, 4, 5, 6, 7, 8])
-    #PL = updating(s, e, k)
-    #plot_PL(PL, s, e)
