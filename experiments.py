@@ -61,10 +61,18 @@ CONFIG = {
     # to the same day to only run one day, same as before). Graphs 4 and 5
     # are built from the same replay, so this one switch covers all three.
     'run_trace': True,
-    'trace_start_date': date(2026, 7, 1),
-    'trace_end_date': date(2026, 8, 1),
+    'trace_start_date': date(2025, 3, 1),
+    'trace_end_date': date(2025, 4, 1),
     'risk_for_trace': 0.0004,
     'k_for_trace': 45,
+
+    # --- graph 5: y-axis cap ---------------------------------------------
+    # q spends most of its ticks near 0, so those bins tower over the tails and
+    # squash everything else flat. This caps the y-axis at a tick count: taller
+    # bars are drawn cut off at the cap (with their true height labelled) and
+    # every value still counts towards the bins, the mean and the sd. None =
+    # no cap, autoscale as before.
+    'q_dist_ymax': 500000,
 
     # --- graph 3z: zoomable trace ---------------------------------------
     # graph 3 draws a whole 6.5h session into 12 inches, so ~180k ticks land
@@ -79,8 +87,10 @@ CONFIG = {
     'trace_zoom_minutes': 5,
 
     # --- result cache ----------------------------------------------------
-    # replayed days are stored in experiment_cache/ keyed by (day, risk, k), so
-    # re-running the same combination is instant instead of 60-90s per day.
+    # replayed days are stored in experiment_cache/ keyed by (day, risk, k) and
+    # by the (T-t) decay main.spread() currently uses, so re-running the same
+    # combination is instant instead of 60-90s per day, and switching the decay
+    # to a constant and back does not throw the other one's results away.
     # Entries are invalidated automatically when main.py's model changes.
     # Set False to force a fresh replay (it still refreshes what it computes).
     'use_cache': True,
@@ -106,7 +116,7 @@ C_SYM = 'tab:orange'   # symmetric quotes: spread_symmetric(), no q skew
 # Q_BINS_MIN exceeds the observed span in shares the bins are narrower than one
 # share and the ones that no integer lands in come out empty -- the histogram
 # turns into a comb. Lower it to the span (printed at run time) to avoid that.
-WEALTH_BINS_MIN = 100
+WEALTH_BINS_MIN = 150
 Q_BINS_MIN = 1000
 
 
@@ -122,6 +132,10 @@ Q_BINS_MIN = 1000
 # plus the source of the functions that decide the numbers. Edit any of them
 # and the fingerprint changes, so stale entries are ignored rather than served.
 # That is what stops the cache handing back pre-flags-fix results.
+#
+# The (T-t) decay main.spread() is running is not left to the fingerprint: it
+# is probed and written into the key as well (see TDECAY below), so constant-t
+# and (1-t) results coexist on disk instead of evicting each other.
 # ============================================================
 USE_CACHE = True   # CONFIG['use_cache'] overrides this at run time
 CACHE_DIR = os.path.join(BASE_DIR, 'experiment_cache')
@@ -143,12 +157,69 @@ FINGERPRINT = _fingerprint()
 _summary = None
 
 
+# ------------------------------------------------------------
+# (T-t) tag: which time decay main.py is currently running
+#
+# main.spread() multiplies the inventory term by a decay factor D(t) -- (1-t)
+# for the real Avellaneda-Stoikov horizon, or a constant while the end-of-day
+# inventory blow-up is parked. That choice moves every number in a day, but it
+# is not an argument to updating(), so it cannot go into the key as one. It is
+# read back out of main.spread() instead, by calling it rather than by reading
+# its source, so any way of writing the same decay lands on the same tag and
+# main.py needs no edit to report it.
+#
+# The tag joins (day, risk, k) in the key, so a constant run and a (1-t) run
+# are stored side by side instead of overwriting each other -- flip main.spread
+# back and the earlier sweep is still on disk. FINGERPRINT above still guards
+# everything else about the model.
+# ------------------------------------------------------------
+def _decay(t):
+    """The factor main.spread() puts on the inventory term at time t.
+
+    Recovered by differencing, so the rest of the function cannot confuse it:
+    the term is (0.5 - q) * risk * var * D(t), so q=0 minus q=1 leaves
+    risk * var * D(t) and the log(1 + risk/k) part cancels out.
+    """
+    risk, var, k = 1e-4, 25.0, 45.0
+    return (main.spread(risk, 0, var, t, k)[0]
+            - main.spread(risk, 1, var, t, k)[0]) / (risk * var)
+
+
+def _decay_symmetric(t):
+    """Same for main.spread_symmetric(), which has no q to difference over.
+
+    Its term is 0.5 * risk * var * D(t), so two var values difference down to
+    0.5 * risk * (v1 - v2) * D(t) and the log part drops out again.
+    """
+    risk, k = 1e-4, 45.0
+    v1, v2 = 25.0, 50.0
+    return 2 * (main.spread_symmetric(risk, v1, t, k)[0]
+                - main.spread_symmetric(risk, v2, t, k)[0]) / (risk * (v1 - v2))
+
+
+def _decay_tag(decay):
+    """'c<value>' if the decay ignores t, 'v<t=0>-<t=0.9>' if it moves with it.
+
+    The value itself goes in, not just constant-or-not, so swapping the 0.5 for
+    0.3 becomes its own cache entry instead of silently replacing the last one.
+    """
+    d0, d1 = decay(0.0), decay(1.0)
+    if abs(d0 - d1) <= 1e-9 * max(1.0, abs(d0)):
+        return f'c{d0:.6g}'
+    return f'v{d0:.6g}-{decay(0.9):.6g}'
+
+
+TDECAY = f'{_decay_tag(_decay)}+{_decay_tag(_decay_symmetric)}'   # spread+spread_symmetric
+
+
 def _key(file_date, risk, k):
-    return f'{file_date}|risk={float(risk):.12g}|k={float(k):.12g}'
+    return f'{file_date}|risk={float(risk):.12g}|k={float(k):.12g}|T={TDECAY}'
 
 
 def _trace_path(file_date, risk, k):
-    return os.path.join(CACHE_DIR, f'trace_{file_date}_r{float(risk):.12g}_k{float(k):.12g}.npz')
+    return os.path.join(
+        CACHE_DIR,
+        f'trace_{file_date}_r{float(risk):.12g}_k{float(k):.12g}_T{TDECAY}.npz')
 
 
 def _load_summary():
@@ -496,7 +567,7 @@ def graph_wealth_distribution(daily, risk, k):
 # ============================================================
 # Graph 5: frequency distribution of q over every tick of every traced day
 # ============================================================
-def graph_q_distribution(daily, risk, k):
+def graph_q_distribution(daily, risk, k, ymax=None):
     q_all = np.concatenate([d['q'] for d in daily])
     sq_all = np.concatenate([d['sq'] for d in daily])
 
@@ -521,7 +592,18 @@ def graph_q_distribution(daily, risk, k):
     ax.axvline(0, color='black', linewidth=0.6)
     ax.set_xlabel('q (shares)')
     ax.set_ylabel('Ticks spent at this q')  # tick-weighted, not time-weighted
-    ax.set_title(f'Inventory distribution over {len(daily)} day(s)  (risk={risk}, k={k})')
+    title = f'Inventory distribution over {len(daily)} day(s)  (risk={risk}, k={k})'
+
+    if ymax is not None:
+        # clip the view, not the data: every tick still lands in its bin and in
+        # the mean/sd above, the bars that run past the cap are just drawn cut off
+        n_clipped = sum(int((np.histogram(x, bins=bins)[0] > ymax).sum())
+                        for x in (q_all, sq_all))
+        ax.set_ylim(0, ymax)
+        if n_clipped:
+            title += f'  --  y capped at {ymax:,}, {n_clipped} bar(s) cut off'
+
+    ax.set_title(title)
     ax.legend()
     ax.grid(True)
     fig.tight_layout()
@@ -548,6 +630,7 @@ def main_run():
         print('Every graph is switched off in CONFIG -- nothing to do.')
         return
 
+    print(f'Model: T-t decay {TDECAY} (fingerprint {FINGERPRINT})')
     print(f'Loading {len(fnames)} trading day(s)...')
     data_cache = main.data(list(fnames))
 
@@ -606,7 +689,8 @@ def main_run():
             fig4.savefig(os.path.join(OUT_DIR, '4_wealth_distribution.pdf'))
             figs.append(fig4)
 
-            fig5 = graph_q_distribution(daily, cfg['risk_for_trace'], cfg['k_for_trace'])
+            fig5 = graph_q_distribution(daily, cfg['risk_for_trace'], cfg['k_for_trace'],
+                                        cfg.get('q_dist_ymax'))
             fig5.savefig(os.path.join(OUT_DIR, '5_q_distribution.pdf'))
             figs.append(fig5)
             saved += 2
