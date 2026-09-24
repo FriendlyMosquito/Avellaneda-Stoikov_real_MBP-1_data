@@ -302,10 +302,21 @@ confirmed the setup works.
 ![wealth distribution 2025 March to 2026 March (T-t)](PNGs/3-3_year_wealth_distribution_T-t.png)
 
 
-## Shortly about what can be seen:
+# Shortly about what can be seen:
 
 The plots clearly show the model working and q stays around 0 with a smaller deviation when T-t is a constant (infinite horizon) and a bigger deviation when T-t is implemented as described in the paper (finite horizon). This makes complete mathematical sense as when the trading day comes closer to the end, t approaches T, and the whole term responsible for inventory `q` influenced skewing gets closer to zero, and q can move more freely.
 The P&L `wealth` of the A-S model mean is always negative and most of the time smaller than the symmetrical strategy. But it also has a smaller standard deviation. With these parameters the model gives a constant negative loss, but at least the loss is more predictable than the symmetrical strategy. Maybe if parameters `k`, `Variance` would be estimated and not chosen naively the model could give a positive return. See limitations section to read more about what in the model could be improved and what is chosen naively.
+
+## Plots showing the behavior difference when T-t is a *fixed constant* vs *paper definition*:
+T-t as in the paper (Not fixed, finite horizon):
+![T-t as defined in the paper](PNGs/T-t_Example_trace_2026-02-25.png)
+
+T-t fixed at a constant (Infinite horizon):
+![Fixed T-t at some constant](PNGs/Example_trace_2026-02-25.png)
+
+You can see the `q` starting to follow the symmetrical `q`'s path as the day comes closer to the end when `T-t` isn't fixed and `q` keeping in it's bounds when `T-t` is a fixed constant.
+
+**Disclaimer:** This is a picked out day where this behavior is more clearly visible. Not every day will have such clear differences.
 
 ---
 
