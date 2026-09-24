@@ -208,29 +208,7 @@ confirmed the setup works.
 
 ## Results
 
-**Configuration**
-
-|                     |                          |
-| ------------------- | ------------------------ |
-| Symbol              | MSFT                     |
-| Period              | 2025-05-01 __ 2025-06-01 |
-| Trading days        | 21                       |
-| $\gamma$ (`risk`)   | 0.0004                   |
-| $k$                 | 45                       |
-| $\sigma^2$ (`vars`) | 24.779591501879146       |
-| T-t                 | Constant                 |
-
-|                     |                          |
-| ------------------- | ------------------------ |
-| Symbol              | MSFT                     |
-| Period              | 2025-05-01 __ 2025-06-01 |
-| Trading days        | 21                       |
-| $\gamma$ (`risk`)   | 0.0004                   |
-| $k$                 | 45                       |
-| $\sigma^2$ (`vars`) | 24.779591501879146       |
-| T-t                 | Paper definition         |
-
----
+**Configuration and plots**
 
 |                     |                          |
 | ------------------- | ------------------------ |
@@ -242,6 +220,11 @@ confirmed the setup works.
 | $\sigma^2$ (`vars`) | 24.779591501879146       |
 | T-t                 | Constant                 |
 
+![q distribution 2025 August](PNGs/25_August_q_distribution.png)
+
+![wealth distribution 2025 August](PNGs/25_August_wealth_distribution.png)
+
+
 |                     |                          |
 | ------------------- | ------------------------ |
 | Symbol              | MSFT                     |
@@ -251,6 +234,10 @@ confirmed the setup works.
 | $k$                 | 45                       |
 | $\sigma^2$ (`vars`) | 24.779591501879146       |
 | T-t                 | Paper definition         |
+
+![q distribution 2025 August (T-t)](PNGs/25_August_q_distribution_T-t.png)
+
+![wealth distribution 2025 August (T-t)](PNGs/25_August_wealth_distribution_T-t.png)
 
 ---
 
@@ -264,6 +251,10 @@ confirmed the setup works.
 | $\sigma^2$ (`vars`) | 24.779591501879146       |
 | T-t                 | Constant                 |
 
+![q distribution 2026 May](PNGs/26_May_q_distribution.png)
+
+![wealth distribution 2026 May](PNGs/26_May_wealth_distribution.png)
+
 |                     |                          |
 | ------------------- | ------------------------ |
 | Symbol              | MSFT                     |
@@ -274,28 +265,9 @@ confirmed the setup works.
 | $\sigma^2$ (`vars`) | 24.779591501879146       |
 | T-t                 | Paper definition         |
 
----
+![q distribution 2026 May (T-t)](PNGs/26_May_q_distribution_T-t.png)
 
-|                     |                          |
-| ------------------- | ------------------------ |
-| Symbol              | MSFT                     |
-| Period              | 2026-07-01 __ 2026-08-01 |
-| Trading days        | 22                       |
-| $\gamma$ (`risk`)   | 0.0004                   |
-| $k$                 | 45                       |
-| $\sigma^2$ (`vars`) | 24.779591501879146       |
-| T-t                 | Constant                 |
-|                     |                          |
-
-|                     |                          |     |
-| ------------------- | ------------------------ | --- |
-| Symbol              | MSFT                     |     |
-| Period              | 2026-07-01 __ 2026-08-01 |     |
-| Trading days        | 22                       |     |
-| $\gamma$ (`risk`)   | 0.0004                   |     |
-| $k$                 | 45                       |     |
-| $\sigma^2$ (`vars`) | 24.779591501879146       |     |
-| T-t                 | Paper definition         |     |
+![wealth distribution 2026 May (T-t)](PNGs/26_May_wealth_distribution_T-t.png)
 
 ---
 ## 1 year run:
@@ -311,16 +283,29 @@ confirmed the setup works.
 | T-t                 | Constant                 |
 |                     |                          |
 
-|                     |                          |     |
-| ------------------- | ------------------------ | --- |
-| Symbol              | MSFT                     |     |
-| Period              | 2025-03-01 __ 2026-03-01 |     |
-| Trading days        | 250                      |     |
-| $\gamma$ (`risk`)   | 0.0004                   |     |
-| $k$                 | 45                       |     |
-| $\sigma^2$ (`vars`) | 24.779591501879146       |     |
-| T-t                 | Paper definition         |     |
+![q distribution 2025 March to 2026 March](PNGs/3-3_year_q_distribution.png)
 
+![wealth distribution 2025 March to 2026 March](PNGs/3-3_year_wealth_distribution.png)
+
+|                     |                          |
+| ------------------- | ------------------------ |
+| Symbol              | MSFT                     |
+| Period              | 2025-03-01 __ 2026-03-01 |
+| Trading days        | 250                      |
+| $\gamma$ (`risk`)   | 0.0004                   |
+| $k$                 | 45                       |
+| $\sigma^2$ (`vars`) | 24.779591501879146       |
+| T-t                 | Paper definition         |
+
+![q distribution 2025 March to 2026 March (T-t)](PNGs/3-3_year_q_distribution_T-t.png)
+
+![wealth distribution 2025 March to 2026 March (T-t)](PNGs/3-3_year_wealth_distribution_T-t.png)
+
+
+## Shortly about what can be seen:
+
+The plots clearly show the model working and q stays around 0 with a smaller deviation when T-t is a constant (infinite horizon) and a bigger deviation when T-t is implemented as described in the paper (finite horizon). This makes complete mathematical sense as when the trading day comes closer to the end, t approaches T, and the whole term responsible for inventory `q` influenced skewing gets closer to zero, and q can move more freely.
+The P&L `wealth` of the A-S model mean is always negative and most of the time smaller than the symmetrical strategy. But it also has a smaller standard deviation. With these parameters the model gives a constant negative loss, but at least the loss is more predictable than the symmetrical strategy. Maybe if parameters `k`, `Variance` would be estimated and not chosen naively the model could give a positive return. See limitations section to read more about what in the model could be improved and what is chosen naively.
 
 ---
 
@@ -329,8 +314,7 @@ confirmed the setup works.
 **Model:**
 
 - **$(T-t)$ is frozen at `constant = 0.5`.** In the paper the inventory penalty and
-  the spread shrink as the session closes, which is what forces the book flat into
-  the bell. In the last commit both terms are constant all day, so the model has no reason to
+  the spread shrink as the session closes. In the last commit both terms are constant all day, so the model has no reason to
   unwind. `updating()` already computes the normalised session time `t` it can be plugged in the calculations of spread if wanted.
 - **$k$ and $A$ are not estimated.** The paper fits the order-arrival intensity
   $\lambda(\delta) = Ae^{-k\delta}$ to the flow. Here $k$ is a free parameter swept
