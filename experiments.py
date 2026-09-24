@@ -62,7 +62,7 @@ CONFIG = {
     # are built from the same replay, so this one switch covers all three.
     'run_trace': True,
     'trace_start_date': date(2025, 3, 1),
-    'trace_end_date': date(2025, 4, 1),
+    'trace_end_date': date(2026, 3, 1),
     'risk_for_trace': 0.0004,
     'k_for_trace': 45,
 
