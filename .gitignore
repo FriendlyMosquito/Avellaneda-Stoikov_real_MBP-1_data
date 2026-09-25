@@ -3,3 +3,4 @@
 Data/
 experiment_cache/
 experiment_plots/
+__pycache__/
