@@ -9,9 +9,9 @@ closed-form quotes from the paper, feeds them real order flow, and outputs what 
 inventory skew actually does to the inventory distribution `q` and the P&L `wealth` distribution
 compared to quoting symmetrically around the mid-price.
 
-As will be seen in the distributions and plots later the model does work, although it rarely makes a positive P&L but if the symmetrical strategy experiences losses, A-S loses in that case are significantly smaller. 
+As will be seen in the distributions and plots later the model does work, although it rarely makes a positive P&L but if the symmetrical strategy experiences major losses, A-S loses in that case are significantly smaller. All the plots from the data that was run are in the Repo's folder `experiment_plots`. Some examples will be found in the `README.md`.
 The `q` sits on average around zero and doesn't deviate by a lot. While the symmetrical case `q` can go all over the place. This is what the Avellaneda-Stoikov model was created for, managing `q`, and the code reproduces it.
-Also I haven't estimated `k` and the appropriate `constant` in place of `T-t`, and **$\sigma^2$** also is a single constant, estimated only once, which also isn't really accurate because the interval was chosen naively. Given these limitations of my implementation the model still has a chance of making a positive P&L while keeping `q` under control.
+Also I haven't estimated `k` and the appropriate `constant` in place of `T-t`, and **$\sigma^2$** also is a single constant, estimated only once, which also isn't really accurate because the interval was chosen naively. Given these limitations of my implementation the model still has a chance of making a positive P&L while keeping `q` under control. All the limitations and deviations from the paper are explained at the bottom of the file.
 
 ---
 
@@ -167,7 +167,7 @@ python3 -m venv .venv && source .venv/bin/activate
 pip install pandas numpy matplotlib
 ```
 
- 
+**Disclaimer**: I am not sure but I think this will clone the plots.
 
 ## Running it
 
@@ -316,7 +316,7 @@ T-t fixed at a constant (Infinite horizon):
 
 You can see the `q` starting to follow the symmetrical `q`'s path as the day comes closer to the end when `T-t` isn't fixed and `q` keeping in it's bounds when `T-t` is a fixed constant.
 
-**Disclaimer:** This is a picked out day where this behavior is more clearly visible. Not every day will have such clear differences.
+**Disclaimer:** This is a picked out day where this behavior is more clearly visible. Not every day will have such clear differences. All the plots from the data that was run are in the Repo's folder `experiment_plots`.
 
 ---
 
