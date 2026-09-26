@@ -9,7 +9,7 @@ closed-form quotes from the paper, feeds them real order flow, and outputs what 
 inventory skew actually does to the inventory distribution `q` and the P&L `wealth` distribution
 compared to quoting symmetrically around the mid-price.
 
-As will be seen in the distributions and plots later the model does work, although it rarely makes a positive P&L but if the symmetrical strategy experiences major losses, A-S loses in that case are significantly smaller. All the plots from the data that was run are in the Repo's folder `experiment_plots`. Some examples will be found in the `README.md`.
+As will be seen in the distributions and plots later the model does work, although it rarely makes a positive P&L but if the symmetrical strategy experiences major losses, A-S loses in that case are significantly smaller. Some examples of the plots will be found in the `README.md`.
 The `q` sits on average around zero and doesn't deviate by a lot. While the symmetrical case `q` can go all over the place. This is what the Avellaneda-Stoikov model was created for, managing `q`, and the code reproduces it.
 Also I haven't estimated `k` and the appropriate `constant` in place of `T-t`, and **$\sigma^2$** also is a single constant, estimated only once, which also isn't really accurate because the interval was chosen naively. Given these limitations of my implementation the model still has a chance of making a positive P&L while keeping `q` under control. All the limitations and deviations from the paper are explained at the bottom of the file.
 
