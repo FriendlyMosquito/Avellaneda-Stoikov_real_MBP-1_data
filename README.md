@@ -371,4 +371,4 @@ Data is not covered by it
 
 ## Author
 
-> **Fill in:** Nedas Virbickas
+> Nedas Virbickas
